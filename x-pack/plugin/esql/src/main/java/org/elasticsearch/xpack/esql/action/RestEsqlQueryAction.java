@@ -55,7 +55,7 @@ public class RestEsqlQueryAction extends BaseRestHandler {
         // Create some kind of query id so that we can correlate the beginning and the end of a query in the logs.
         String queryId = UUIDs.base64UUID();
 
-        LOGGER.info("Beginning execution of ESQL query.\nQuery ID: [{}]\nQuery string: [{}]", queryId, esqlRequest.query());
+        LOGGER.debug("Beginning execution of ESQL query.\nQuery ID: [{}]\nQuery string: [{}]", queryId, esqlRequest.query());
 
         return channel -> {
             RestCancellableNodeClient cancellableClient = new RestCancellableNodeClient(client, request.getHttpChannel());
@@ -84,7 +84,7 @@ public class RestEsqlQueryAction extends BaseRestHandler {
         return ActionListener.wrap(r -> {
             listener.onResponse(r);
             // At this point, the StopWatch should already have been stopped, so we log a consistent time.
-            LOGGER.info(
+            LOGGER.debug(
                 "Finished execution of ESQL query.\nQuery ID: [{}]\nQuery string: [{}]\nExecution time: [{}]ms",
                 queryId,
                 esqlQuery,
@@ -94,7 +94,7 @@ public class RestEsqlQueryAction extends BaseRestHandler {
             // In case of failure, stop the time manually before sending out the response.
             long timeMillis = responseTimeStopWatch.stop().getMillis();
             listener.onFailure(ex);
-            LOGGER.info(
+            LOGGER.debug(
                 "Failed execution of ESQL query.\nQuery ID: [{}]\nQuery string: [{}]\nExecution time: [{}]ms",
                 queryId,
                 esqlQuery,
