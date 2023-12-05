@@ -138,10 +138,16 @@ and then run `curl` in another window like this:
 
     curl -u elastic:password localhost:9200
 
-The definition of this Elasticsearch instance can be found [here](build-tools-internal/src/main/groovy/elasticsearch.run.gradle).
-While developing, you may want to disable security. This can be done as follows:
+To send requests to this Elasticsearch instance, either use the built-in `elastic`
+user and password as above or use the pre-configured `elastic-admin` user:
+
+    curl -u elastic-admin:elastic-password localhost:9200
+
+Security can also be disabled altogether:
 
     ./gradlew :run -Dtests.es.xpack.security.enabled=false
+
+The definition of this Elasticsearch cluster can be found [here](build-tools-internal/src/main/groovy/elasticsearch.run.gradle).
 
 ### Importing the project into IntelliJ IDEA
 
