@@ -18,7 +18,7 @@ import org.elasticsearch.xpack.esql.plan.physical.PhysicalPlan;
 import org.elasticsearch.xpack.esql.plan.physical.ProjectExec;
 import org.elasticsearch.xpack.esql.plan.physical.RegexExtractExec;
 import org.elasticsearch.xpack.esql.plan.physical.UnaryExec;
-import org.elasticsearch.xpack.ql.common.Failure;
+import org.elasticsearch.xpack.ql.common.Failures;
 import org.elasticsearch.xpack.ql.expression.Alias;
 import org.elasticsearch.xpack.ql.expression.AttributeMap;
 import org.elasticsearch.xpack.ql.expression.AttributeSet;
@@ -35,7 +35,6 @@ import org.elasticsearch.xpack.ql.tree.Source;
 import org.elasticsearch.xpack.ql.util.Holder;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 import static java.lang.Boolean.FALSE;
@@ -61,8 +60,8 @@ public class PhysicalPlanOptimizer extends ParameterizedRuleExecutor<PhysicalPla
     }
 
     PhysicalPlan verify(PhysicalPlan plan) {
-        Collection<Failure> failures = verifier.verify(plan);
-        if (failures.isEmpty() == false) {
+        Failures failures = verifier.verify(plan);
+        if (failures.failures().isEmpty() == false) {
             throw new VerificationException(failures);
         }
         return plan;

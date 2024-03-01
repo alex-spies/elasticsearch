@@ -10,13 +10,9 @@ package org.elasticsearch.xpack.esql.optimizer;
 import org.elasticsearch.xpack.esql.optimizer.OptimizerRules.PhysicalPlanDependencyCheck;
 import org.elasticsearch.xpack.esql.plan.physical.FieldExtractExec;
 import org.elasticsearch.xpack.esql.plan.physical.PhysicalPlan;
-import org.elasticsearch.xpack.ql.common.Failure;
+import org.elasticsearch.xpack.ql.common.Failures;
 import org.elasticsearch.xpack.ql.expression.Attribute;
 import org.elasticsearch.xpack.ql.expression.Expressions;
-
-import java.util.Collection;
-import java.util.LinkedHashSet;
-import java.util.Set;
 
 import static org.elasticsearch.xpack.ql.common.Failure.fail;
 
@@ -29,12 +25,11 @@ public final class PhysicalVerifier {
     private PhysicalVerifier() {}
 
     /** Verifies the physical plan. */
-    public Collection<Failure> verify(PhysicalPlan plan) {
-        Set<Failure> failures = new LinkedHashSet<>();
+    public Failures verify(PhysicalPlan plan) {
+        Failures failures = new Failures();
 
         plan.forEachDown(p -> {
-            // FIXME: re-enable
-            // DEPENDENCY_CHECK.checkPlan(p, failures);
+            DEPENDENCY_CHECK.checkPlan(p, failures);
             if (p instanceof FieldExtractExec fieldExtractExec) {
                 Attribute sourceAttribute = fieldExtractExec.sourceAttribute();
                 if (sourceAttribute == null) {
