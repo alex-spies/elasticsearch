@@ -53,6 +53,7 @@ import org.elasticsearch.xpack.esql.expression.Order;
 import org.elasticsearch.xpack.esql.expression.function.EsqlFunctionRegistry;
 import org.elasticsearch.xpack.esql.expression.function.aggregate.AggregateFunction;
 import org.elasticsearch.xpack.esql.expression.function.aggregate.Count;
+import org.elasticsearch.xpack.esql.expression.function.aggregate.Min;
 import org.elasticsearch.xpack.esql.expression.function.aggregate.SpatialAggregateFunction;
 import org.elasticsearch.xpack.esql.expression.function.aggregate.SpatialCentroid;
 import org.elasticsearch.xpack.esql.expression.function.aggregate.Sum;
@@ -105,6 +106,7 @@ import org.elasticsearch.xpack.esql.plan.physical.GrokExec;
 import org.elasticsearch.xpack.esql.plan.physical.HashJoinExec;
 import org.elasticsearch.xpack.esql.plan.physical.LimitExec;
 import org.elasticsearch.xpack.esql.plan.physical.LocalSourceExec;
+import org.elasticsearch.xpack.esql.plan.physical.OrderExec;
 import org.elasticsearch.xpack.esql.plan.physical.PhysicalPlan;
 import org.elasticsearch.xpack.esql.plan.physical.ProjectExec;
 import org.elasticsearch.xpack.esql.plan.physical.RowExec;
@@ -4633,6 +4635,29 @@ public class PhysicalPlanOptimizerTests extends ESTestCase {
             lookup.output().stream().map(Object::toString).toList(),
             matchesList().item(startsWith("int{f}")).item(startsWith("name{f}"))
         );
+    }
+
+    public void testPlanSanityCheck() throws Exception {
+        var plan = physicalPlan("""
+            from employees
+            | stats a = min(salary) by emp_no
+            """);
+
+        var limit = as(plan, LimitExec.class);
+        var aggregate = as(limit.child(), AggregateExec.class);
+        var min = as(Alias.unwrap(aggregate.aggregates().get(0)), Min.class);
+        var salary = as(min.field(), NamedExpression.class);
+
+        // emulate a rule that uses an inexistent field
+        var invalidPlan = new OrderExec(
+            plan.source(),
+            plan,
+            asList(new Order(plan.source(), salary, Order.OrderDirection.ASC, Order.NullsPosition.FIRST))
+        );
+
+        IllegalStateException e = expectThrows(IllegalStateException.class, () -> optimizedPlan(invalidPlan));
+        assertThat(e.getMessage(), containsString("Plan [OrderExec[[Order[salary"));
+        assertThat(e.getMessage(), containsString(" optimized incorrectly due to missing references [salary"));
     }
 
     @SuppressWarnings("SameParameterValue")

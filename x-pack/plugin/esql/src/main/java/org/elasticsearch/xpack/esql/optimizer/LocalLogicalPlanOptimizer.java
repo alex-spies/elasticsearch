@@ -67,6 +67,8 @@ public class LocalLogicalPlanOptimizer extends ParameterizedRuleExecutor<Logical
     }
 
     public LogicalPlan localOptimize(LogicalPlan plan) {
+        // TODO: should check consistency; let's inherit from a common class to ensure that, otherwise we'll have to test this for the
+        // local optimizers, too.
         return execute(plan);
     }
 }

@@ -7,16 +7,12 @@
 
 package org.elasticsearch.xpack.esql.optimizer;
 
-import org.elasticsearch.xpack.esql.common.Failure;
+import org.elasticsearch.xpack.esql.common.Failures;
 import org.elasticsearch.xpack.esql.core.expression.Attribute;
 import org.elasticsearch.xpack.esql.core.expression.Expressions;
 import org.elasticsearch.xpack.esql.optimizer.rules.PlanConsistencyChecker;
 import org.elasticsearch.xpack.esql.plan.physical.FieldExtractExec;
 import org.elasticsearch.xpack.esql.plan.physical.PhysicalPlan;
-
-import java.util.Collection;
-import java.util.LinkedHashSet;
-import java.util.Set;
 
 import static org.elasticsearch.xpack.esql.common.Failure.fail;
 
@@ -29,12 +25,11 @@ public final class PhysicalVerifier {
     private PhysicalVerifier() {}
 
     /** Verifies the physical plan. */
-    public Collection<Failure> verify(PhysicalPlan plan) {
-        Set<Failure> failures = new LinkedHashSet<>();
+    public Failures verify(PhysicalPlan plan) {
+        Failures failures = new Failures();
+        Failures dependencyFailures = new Failures();
 
         plan.forEachDown(p -> {
-            // FIXME: re-enable
-            // DEPENDENCY_CHECK.checkPlan(p, failures);
             if (p instanceof FieldExtractExec fieldExtractExec) {
                 Attribute sourceAttribute = fieldExtractExec.sourceAttribute();
                 if (sourceAttribute == null) {
@@ -46,9 +41,18 @@ public final class PhysicalVerifier {
                             fieldExtractExec.child()
                         )
                     );
+                    return;
                 }
             }
+
+            // Needs to come after the FieldExtractExec check, as that one prevents FieldExtractExec from having a null source attribute,
+            // which the dependency checker cannot handle.
+            DEPENDENCY_CHECK.checkPlan(p, dependencyFailures);
         });
+
+        if (dependencyFailures.hasFailures()) {
+            throw new IllegalStateException(dependencyFailures.toString());
+        }
 
         return failures;
     }
