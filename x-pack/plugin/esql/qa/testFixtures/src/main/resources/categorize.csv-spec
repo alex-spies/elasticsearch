@@ -6,7 +6,7 @@ FROM sample_data
   | SORT count DESC, category
 ;
 
-count:long | values:keyword                                                        | category:category
+count:long | values:keyword                                                        | category:keyword
 3          | [Connected to 10.1.0.1, Connected to 10.1.0.2, Connected to 10.1.0.3] | .*?Connected.+?to.*?
 3          | [Connection error]                                                    | .*?Connection.+?error.*?
 1          | [Disconnected]                                                        | .*?Disconnected.*?
@@ -20,7 +20,7 @@ FROM sample_data
   | SORT count DESC, category
 ;
 
-count:long | values:keyword                                                        | category:category
+count:long | values:keyword                                                        | category:keyword
 3          | [Connected to 10.1.0.1, Connected to 10.1.0.2, Connected to 10.1.0.3] | .*?CONNECTED.+?TO.*?
 3          | [Connection error]                                                    | .*?CONNECTION.+?ERROR.*?
 1          | [Disconnected]                                                        | .*?DISCONNECTED.*?
