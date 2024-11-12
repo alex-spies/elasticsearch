@@ -7,11 +7,9 @@
 
 package org.elasticsearch.xpack.esql.expression.function.grouping;
 
-import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.compute.ann.Evaluator;
 import org.elasticsearch.compute.operator.EvalOperator.ExpressionEvaluator;
 import org.elasticsearch.xpack.esql.capabilities.Validatable;
 import org.elasticsearch.xpack.esql.core.expression.Expression;
@@ -83,14 +81,9 @@ public class Categorize extends GroupingFunction implements Validatable {
         return field.foldable();
     }
 
-    @Evaluator
-    static BytesRef process(BytesRef v) {
-        return v;
-    }
-
     @Override
     public ExpressionEvaluator.Factory toEvaluator(ToEvaluator toEvaluator) {
-        return new CategorizeEvaluator.Factory(source(), toEvaluator.apply(field));
+        throw new UnsupportedOperationException("CATEGORIZE is only evaluated during aggregations");
     }
 
     @Override
