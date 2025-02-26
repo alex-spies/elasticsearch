@@ -14,6 +14,11 @@ import org.elasticsearch.logging.Logger;
 import org.elasticsearch.xcontent.XContentBuilder;
 import org.elasticsearch.xcontent.json.JsonXContent;
 
+import perfetto.protos.ProcessDescriptor;
+import perfetto.protos.Trace;
+import perfetto.protos.TracePacket;
+import perfetto.protos.TrackDescriptor;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -50,26 +55,25 @@ public class ProfileParser {
         int driverIndex = 0;
         try (
             OutputStream output = Files.newOutputStream(outputFileName);
-            XContentBuilder builder = new XContentBuilder(JsonXContent.jsonXContent, output)
         ) {
             logger.info("Starting to write {}", outputFileName);
 
-            builder.startObject();
-            builder.field("displayTimeUnit", "ns");
+            var trace = Trace.newBuilder();
 
-            builder.field("otherData");
-            builder.startObject();
-            builder.field("version", "My Application v1.0");
-            builder.endObject();
+            var packet = TracePacket.newBuilder();
 
-            builder.field("traceEvents");
-            builder.startArray();
-            for (Map<String, Object> driver : drivers) {
-                parseDriverProfile(driver, driverIndex++, builder);
-            }
-            builder.endArray();
+            var processDescriptor = ProcessDescriptor.newBuilder();
+            processDescriptor.setPid(1);
+            processDescriptor.setProcessName("node0");
+            var processTrackDescriptor = TrackDescriptor.newBuilder();
+            processTrackDescriptor.setUuid(1);
+            processTrackDescriptor.setProcess(processDescriptor.build());
 
-            builder.endObject();
+            packet.setTrackDescriptor(processTrackDescriptor.build());
+
+            trace.addPacket(packet);
+
+            trace.build().writeTo(output);
 
             logger.info("Finished writing to", outputFileName);
         }
@@ -89,10 +93,11 @@ public class ProfileParser {
         String name = taskDescription + driverIndex;
 
         builder.startObject();
-        builder.field("ph", "X");
+        builder.field("ph", "B");
         builder.field("name", name);
         builder.field("cat", taskDescription);
         builder.field("pid", 0);
+        builder.field("tid", driverIndex);
         long startMicros = readIntOrLong(driver, "start_millis") * 1000;
         builder.field("ts", startMicros);
         double durationMicros = ((double) readIntOrLong(driver, "took_nanos")) / 1000.0;
@@ -117,6 +122,16 @@ public class ProfileParser {
         builder.endArray();
         builder.endObject();
 
+        builder.endObject();
+
+
+        /// End event
+        builder.startObject();
+        builder.field("ph", "E");
+        builder.field("name", name);
+        builder.field("pid", 0);
+        builder.field("tid", driverIndex);
+        builder.field("ts", readIntOrLong(driver, "stop_millis") * 1000);
         builder.endObject();
     }
 
