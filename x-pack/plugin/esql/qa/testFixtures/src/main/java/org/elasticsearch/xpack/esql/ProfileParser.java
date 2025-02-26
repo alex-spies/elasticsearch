@@ -56,20 +56,11 @@ public class ProfileParser {
 
             builder.startObject();
             builder.field("displayTimeUnit", "ns");
-            builder.field("systemTraceEvents", "SystemTraceData");
 
             builder.field("otherData");
             builder.startObject();
             builder.field("version", "My Application v1.0");
             builder.endObject();
-
-            builder.field("stackFrames");
-            builder.startObject();
-            builder.endObject();
-
-            builder.field("samples");
-            builder.startArray();
-            builder.endArray();
 
             builder.field("traceEvents");
             builder.startArray();
