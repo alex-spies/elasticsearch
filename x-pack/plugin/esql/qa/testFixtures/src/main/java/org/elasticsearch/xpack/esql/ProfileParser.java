@@ -14,10 +14,13 @@ import org.elasticsearch.logging.Logger;
 import org.elasticsearch.xcontent.XContentBuilder;
 import org.elasticsearch.xcontent.json.JsonXContent;
 
+import perfetto.protos.CounterDescriptor;
 import perfetto.protos.ProcessDescriptor;
+import perfetto.protos.ThreadDescriptor;
 import perfetto.protos.Trace;
 import perfetto.protos.TracePacket;
 import perfetto.protos.TrackDescriptor;
+import perfetto.protos.TrackEvent;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -60,18 +63,15 @@ public class ProfileParser {
 
             var trace = Trace.newBuilder();
 
-            var packet = TracePacket.newBuilder();
+            trace.addPacket(processDescriptor(0, 0, "node"));
+            int tid = 0;
+            trace.addPacket(threadDescriptor(1, 0, tid, "driver"));
 
-            var processDescriptor = ProcessDescriptor.newBuilder();
-            processDescriptor.setPid(1);
-            processDescriptor.setProcessName("node0");
-            var processTrackDescriptor = TrackDescriptor.newBuilder();
-            processTrackDescriptor.setUuid(1);
-            processTrackDescriptor.setProcess(processDescriptor.build());
+            trace.addPacket(sliceBegin(0, tid, "driver0track0"));
+            trace.addPacket(sliceEnd(1000000, tid));
 
-            packet.setTrackDescriptor(processTrackDescriptor.build());
-
-            trace.addPacket(packet);
+            trace.addPacket(sliceBegin(2000000, tid, "driver0track1"));
+            trace.addPacket(sliceEnd(3000000, tid));
 
             trace.build().writeTo(output);
 
@@ -81,13 +81,44 @@ public class ProfileParser {
         logger.info("Exiting", args[0]);
     }
 
+    private static TracePacket sliceBegin(long timestamp, int trackUuid, String name) {
+        var packet = TracePacket.newBuilder().setTimestamp(timestamp).setTrustedPacketSequenceId(0);
+
+        var event = TrackEvent.newBuilder().setType(TrackEvent.Type.TYPE_SLICE_BEGIN).setTrackUuid(trackUuid).setName(name);
+
+        return packet.setTrackEvent(event).build();
+    }
+
+    private static TracePacket sliceEnd(long timestamp, int trackUuid) {
+        var packet = TracePacket.newBuilder().setTimestamp(timestamp).setTrustedPacketSequenceId(0);
+
+        var event = TrackEvent.newBuilder().setType(TrackEvent.Type.TYPE_SLICE_END).setTrackUuid(trackUuid);
+
+        return packet.setTrackEvent(event).build();
+    }
+
+    private static TracePacket processDescriptor(int uuid, int pid, String processName) {
+        var processDescriptor = ProcessDescriptor.newBuilder().setPid(pid).setProcessName(processName).build();
+        var processTrackDescriptor = TrackDescriptor.newBuilder().setUuid(uuid).setProcess(processDescriptor).build();
+
+        return TracePacket.newBuilder().setTrackDescriptor(processTrackDescriptor).build();
+    }
+
+    private static TracePacket threadDescriptor(int uuid, int pid, int tid, String threadName) {
+        var threadDescriptor = ThreadDescriptor.newBuilder().setPid(pid).setTid(tid).setThreadName(threadName).build();
+        var processTrackDescriptor = TrackDescriptor.newBuilder().setUuid(uuid).setThread(threadDescriptor).build();
+
+        return TracePacket.newBuilder().setTrackDescriptor(processTrackDescriptor).build();
+    }
+
+    private static TracePacket threadTimeDescriptor(int uuid) {
+        var counterDescriptor = CounterDescriptor.newBuilder().setType(CounterDescriptor.BuiltinCounterType.COUNTER_THREAD_TIME_NS);
+        var counterTrackDescriptor = TrackDescriptor.newBuilder().setUuid(uuid).setCounter(counterDescriptor);
+
+        return TracePacket.newBuilder().setTrackDescriptor(counterTrackDescriptor).build();
+    }
+
     @SuppressWarnings("unchecked")
-    /**
-     * Uses the legacy Chromium spec for event descriptions:
-     * https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU
-     *
-     * We probably want to upgrade to the newer, more flexible protobuf-based spec by perfetto in the future.
-     */
     private static void parseDriverProfile(Map<String, Object> driver, int driverIndex, XContentBuilder builder) throws IOException {
         String taskDescription = (String) driver.get("task_description");
         String name = taskDescription + driverIndex;
