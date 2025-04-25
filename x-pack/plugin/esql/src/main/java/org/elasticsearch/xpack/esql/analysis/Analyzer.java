@@ -177,7 +177,8 @@ public class Analyzer extends ParameterizedRuleExecutor<LogicalPlan, AnalyzerCon
             new ResolveEnrich(),
             new ResolveInference(),
             new ResolveLookupTables(),
-            new ResolveFunctions()
+            new ResolveFunctions(),
+            new ResolveImplicitlyCastUnionTypes()
         ),
         new Batch<>(
             "Resolution",
@@ -188,9 +189,9 @@ public class Analyzer extends ParameterizedRuleExecutor<LogicalPlan, AnalyzerCon
              */
             new ImplicitCasting(),
             new ResolveRefs(),
-            new ResolveUnionTypes(),  // Must be after ResolveRefs, so union types can be found
+            new ResolveUnionTypes()  // Must be after ResolveRefs, so union types can be found
             // Must be after ResolveUnionTypes, if there is explicit casting on the union typed fields, implicit casting won't be added
-            new ImplicitCastingForUnionTypedFields()
+            //new ImplicitCastingForUnionTypedFields()
         ),
         new Batch<>("Finish Analysis", Limiter.ONCE, new AddImplicitLimit(), new AddImplicitForkLimit(), new UnionTypesCleanup())
     );
@@ -1577,6 +1578,31 @@ public class Analyzer extends ParameterizedRuleExecutor<LogicalPlan, AnalyzerCon
         }
     }
 
+    private static class ResolveImplicitlyCastUnionTypes extends Rule<LogicalPlan, LogicalPlan> {
+        @Override
+        public LogicalPlan apply(LogicalPlan plan) {
+            return plan.transformUp(EsRelation.class, relation -> relation.transformExpressionsUp(FieldAttribute.class, f -> {
+                if (f.field() instanceof InvalidMappedField imf && imf.types().stream().allMatch(DataType::isDate)) {
+                    HashMap<ResolveUnionTypes.TypeResolutionKey, Expression> typeResolutions = new HashMap<>();
+
+                    var convert = new ToDateNanos(f.source(), f);
+
+                    imf.types().forEach(type -> {
+                        ResolveUnionTypes.TypeResolutionKey key = new ResolveUnionTypes.TypeResolutionKey(f.name(), type);
+                        var concreteConvert = ResolveUnionTypes.typeSpecificConvert(convert, f.source(), type, imf);
+                        typeResolutions.put(key, concreteConvert);
+                    });
+
+                    var resolvedField = ResolveUnionTypes.resolvedMultiTypeEsField(f, typeResolutions);
+
+                    return new FieldAttribute(f.source(), f.parentName(), f.name(), resolvedField, f.nullable(), f.id(), f.synthetic());
+                }
+
+                return f;
+            }));
+        }
+    }
+
     /**
      * The EsqlIndexResolver will create InvalidMappedField instances for fields that are ambiguous (i.e. have multiple mappings).
      * During {@link ResolveRefs} we do not convert these to UnresolvedAttribute instances, as we want to first determine if they can
@@ -1598,7 +1624,7 @@ public class Analyzer extends ParameterizedRuleExecutor<LogicalPlan, AnalyzerCon
             // Collect field attributes from previous runs
             plan.forEachUp(EsRelation.class, rel -> {
                 for (Attribute attr : rel.output()) {
-                    if (attr instanceof FieldAttribute fa && fa.field() instanceof MultiTypeEsField) {
+                    if (attr instanceof FieldAttribute fa && fa.field() instanceof MultiTypeEsField && fa.synthetic()) {
                         unionFieldAttributes.add(fa);
                     }
                 }
@@ -1702,7 +1728,7 @@ public class Analyzer extends ParameterizedRuleExecutor<LogicalPlan, AnalyzerCon
             }
         }
 
-        private MultiTypeEsField resolvedMultiTypeEsField(FieldAttribute fa, HashMap<TypeResolutionKey, Expression> typeResolutions) {
+        public static MultiTypeEsField resolvedMultiTypeEsField(FieldAttribute fa, HashMap<TypeResolutionKey, Expression> typeResolutions) {
             Map<String, Expression> typesToConversionExpressions = new HashMap<>();
             InvalidMappedField imf = (InvalidMappedField) fa.field();
             imf.getTypesToIndices().forEach((typeName, indexNames) -> {
@@ -1715,7 +1741,7 @@ public class Analyzer extends ParameterizedRuleExecutor<LogicalPlan, AnalyzerCon
             return MultiTypeEsField.resolveFrom(imf, typesToConversionExpressions);
         }
 
-        private Expression typeSpecificConvert(ConvertFunction convert, Source source, DataType type, InvalidMappedField mtf) {
+        private static Expression typeSpecificConvert(ConvertFunction convert, Source source, DataType type, InvalidMappedField mtf) {
             EsField field = new EsField(mtf.getName(), type, mtf.getProperties(), mtf.isAggregatable());
             FieldAttribute originalFieldAttr = (FieldAttribute) convert.field();
             FieldAttribute resolvedAttr = new FieldAttribute(
