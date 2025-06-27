@@ -20,7 +20,7 @@ import org.elasticsearch.xpack.esql.plan.logical.Fork;
 import org.elasticsearch.xpack.esql.plan.logical.LeafPlan;
 import org.elasticsearch.xpack.esql.plan.logical.Limit;
 import org.elasticsearch.xpack.esql.plan.logical.LogicalPlan;
-import org.elasticsearch.xpack.esql.plan.logical.OrderBy;
+import org.elasticsearch.xpack.esql.plan.logical.PipelineBreaker;
 import org.elasticsearch.xpack.esql.plan.logical.Sample;
 import org.elasticsearch.xpack.esql.plan.logical.TopN;
 import org.elasticsearch.xpack.esql.plan.logical.UnaryPlan;
@@ -278,18 +278,19 @@ public class Mapper {
                 return new FragmentExec(bp);
             }
 
+            if (join.isRemote()) {
+                // This is generally wrong in case of pipeline breakers upstream from the join, but we validate against these.
+                // The only potential pipeline breakers upstream should be limits duplicated past the join from PushdownAndCombineLimits,
+                // but they are okay to perform on the data nodes because they only serve to reduce the number of rows processed and
+                // don't affect correctness due to another limit being downstream.
+                return new FragmentExec(bp);
+            }
+
             PhysicalPlan left = map(bp.left());
 
             // only broadcast joins supported for now - hence push down as a streaming operator
             if (left instanceof FragmentExec fragment) {
                 return new FragmentExec(bp);
-            }
-
-            if (FRAGMENT_EXEC_HACK_ENABLED) {
-                var leftPlan = mapToFragmentExec(join, left);
-                if (leftPlan != null) {
-                    return leftPlan;
-                }
             }
 
             PhysicalPlan right = map(bp.right());
@@ -320,7 +321,7 @@ public class Mapper {
     }
 
     public static boolean isPipelineBreaker(LogicalPlan p) {
-        return p instanceof Aggregate || p instanceof TopN || p instanceof Limit || p instanceof OrderBy;
+        return p instanceof PipelineBreaker;
     }
 
     private PhysicalPlan addExchangeForFragment(LogicalPlan logical, PhysicalPlan child) {

@@ -96,6 +96,8 @@ public class LookupJoin extends Join implements SurrogateLogicalPlan, PostAnalys
     }
 
     private void checkRemoteJoin(Failures failures) {
+        // TODO: failure in case of any pipeline breakers in the children, including limits
+
         boolean[] agg = { false };
         boolean[] enrichCoord = { false };
         boolean[] sort = { false };
